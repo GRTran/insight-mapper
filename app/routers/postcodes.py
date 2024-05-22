@@ -13,7 +13,7 @@ from app.schemas.postcodes import (
     PostcodeResponseSchema,
     PostcodeQueryParams,
 )
-from app.crud.postcodes import get_items, create, create_multiple, delete_postcode
+from app.crud.postcodes import get_items, create, delete_postcode
 
 # Set the base router
 router = APIRouter(prefix="/" + URL_SEARCH)
