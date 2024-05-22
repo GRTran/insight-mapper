@@ -5,7 +5,7 @@ import os
 
 
 class DatabaseConfig(BaseModel):
-    dsn: str = "sqlite:///app/db/postcodes.db"
+    dsn: str = "sqlite:///data/postcodes.db"
 
 
 class Config:

@@ -47,19 +47,6 @@ async def create_latlons(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-@router.post("/add-multiple", tags=["search"])
-async def create_multiple_items(
-    items: list[PostcodeCreateSchema], db: Session = Depends(create_session)
-):
-    """Create multiple items in the DB by supplying a list of dictionaries defining
-    the Postcode, latitudes and longitudes."""
-    try:
-        create_multiple(db, items)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
 @router.delete("/{postcode}", tags=["search"], status_code=204)
 async def delete_item(postcode: str, db: Session = Depends(create_session)):
     """Delete an entry in the db if it is present."""

@@ -59,28 +59,6 @@ def create(db: Session, item: PostcodeCreateSchema) -> Postcodes:
     db.commit()
     return db_item
 
-
-def create_multiple(db: Session, items: list[PostcodeCreateSchema]):
-    db_items = []
-
-    for item in items:
-        elems = item.postcode.split(sep=" ")
-        subdistrict = elems[0]
-        district = elems[0][:2]
-
-        db_items += [
-            Postcodes(
-                full_postcode=item.postcode,
-                district_postcode=district,
-                subarea_postcode=subdistrict,
-                latitude=item.lat,
-                longitude=item.lon,
-            )
-        ]
-    db.insert(db_items)
-    db.commit()
-
-
 def delete_postcode(db: Session, postcode: str):
     result = db.execute(select(Postcodes).filter(Postcodes.full_postcode == postcode))
     item = result.scalar_one_or_none()
