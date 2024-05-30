@@ -171,7 +171,7 @@ def create_multiple() -> None:
     lats = data["latitude"].values
     lons = data["longitude"].values
 
-    engine = create_engine("sqlite:///app/db/postcodes.db")
+    engine = create_engine("sqlite:///data/postcodes.db")
     with Session(engine) as session:
         for chunk in range(0, len(codes), 1000):
             session.add_all(
@@ -185,11 +185,11 @@ def create_multiple() -> None:
                             "longitude": lons[i],
                         }
                     )
-                    for i in range(chunk, max(chunk + 1000, len(codes)))
+                    for i in range(chunk, min(chunk + 1000, len(codes)))
                 ]
             )
             session.commit()
-            print(chunk // len(codes) * 100)
+            print(chunk / len(codes) * 100)
 
 
 # ---------------------------------------------------------------------------- #
