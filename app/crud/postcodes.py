@@ -37,7 +37,7 @@ def get_items(
     if query_data.min_lon:
         q = q.filter(Postcodes.longitude >= query_data.min_lon)
     if query_data.max_lon:
-        q = q.filter(Postcodes.longitude <= query_data.min_lon)
+        q = q.filter(Postcodes.longitude <= query_data.max_lon)
     result = db.execute(q)
     return result.scalars().all()
 
@@ -58,6 +58,7 @@ def create(db: Session, item: PostcodeCreateSchema) -> Postcodes:
     db.add(db_item)
     db.commit()
     return db_item
+
 
 def delete_postcode(db: Session, postcode: str):
     result = db.execute(select(Postcodes).filter(Postcodes.full_postcode == postcode))

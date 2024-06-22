@@ -14,6 +14,7 @@ from app.schemas.postcodes import (
     PostcodeQueryParams,
 )
 from app.crud.postcodes import get_items, create, delete_postcode
+from app.services.query import get_house_data
 
 # Set the base router
 router = APIRouter(prefix="/" + URL_SEARCH)
@@ -31,7 +32,13 @@ async def read_latlons(
     between crud and router.
     """
     try:
-        return get_items(db, query_data)
+        # Get the items from the DB
+        # items = get_items(db, query_data)
+        # # Now use schema to also call the SPARQL Land Registry API
+        # house_data = get_house_data(house_data)
+        # Now aggregate the items and data together and return aggregated data
+        items = get_items(db, query_data)
+        return items
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
@@ -46,6 +53,7 @@ async def create_latlons(
         return answer
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @router.delete("/{postcode}", tags=["search"], status_code=204)
 async def delete_item(postcode: str, db: Session = Depends(create_session)):
