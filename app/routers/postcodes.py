@@ -12,6 +12,7 @@ from app.schemas.postcodes import (
     PostcodeCreateSchema,
     PostcodeResponseSchema,
     PostcodeQueryParams,
+    LandRegistrySchema,
 )
 from app.crud.postcodes import get_items, create, delete_postcode
 from app.services.query import get_house_data
@@ -20,10 +21,10 @@ from app.services.query import get_house_data
 router = APIRouter(prefix="/" + URL_SEARCH)
 
 
-@router.get("/", tags=["search"], response_model=list[PostcodeResponseSchema])
+@router.get("/", tags=["search"], response_model=list[LandRegistrySchema])
 async def read_latlons(
     query_data: PostcodeQueryParams = Depends(), db: Session = Depends(create_session)
-) -> list[PostcodeResponseSchema]:
+) -> list[LandRegistrySchema]:
     """Get the latitude and longitudes from a postcode.
 
     e.g. http://localhost:8000/search?postcode=example_name&min_lat=10.0&min_lon=100.0
@@ -33,12 +34,11 @@ async def read_latlons(
     """
     try:
         # Get the items from the DB
-        # items = get_items(db, query_data)
+        items = await get_items(db, query_data)
         # # Now use schema to also call the SPARQL Land Registry API
-        # house_data = get_house_data(house_data)
+        house_data = await get_house_data(items)
         # Now aggregate the items and data together and return aggregated data
-        items = get_items(db, query_data)
-        return items
+        return house_data
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 

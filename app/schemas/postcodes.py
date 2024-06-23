@@ -2,6 +2,7 @@
 """
 
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -35,3 +36,10 @@ class PostcodeResponseSchema(PostcodeBase):
 
     class Config:
         orm_mode = True
+
+
+class LandRegistrySchema(PostcodeBase):
+    """All data associated with"""
+
+    sold_prices: list[float] = Field(None)
+    dates: list[datetime] = Field(None)

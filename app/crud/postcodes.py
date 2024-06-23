@@ -15,7 +15,7 @@ from app.schemas.postcodes import (
 from app.models.postcodes import Postcodes
 
 
-def get_items(
+async def get_items(
     db: Session, query_data: PostcodeQueryParams
 ) -> list[PostcodeResponseSchema]:
     """Filter the postcodes db depending on input arguments supplied."""
