@@ -37,9 +37,22 @@ class PostcodeResponseSchema(PostcodeBase):
     class Config:
         orm_mode = True
 
+class LatLonBoundsSchema(BaseModel):
+    """The bounds of a square."""
+    bottom_left: list[float] 
+    bottom_right: list[float] 
+    upper_right: list[float] 
+    upper_left: list[float]
 
-class LandRegistrySchema(PostcodeBase):
+
+class LatLonSummarySchema(LatLonBoundsSchema):
+    """Summary of number of postcodes falling in bounds."""
+    #:n_postcodes: defines the number of postcodes falling within this space.
+    n_postcodes: Optional[int] = Field(0)
+
+
+class LandRegistrySchema(LatLonSummarySchema):
     """All data associated with"""
 
-    sold_prices: list[float] = Field(None)
+    sold_prices: list[float] 
     dates: list[datetime] = Field(None)

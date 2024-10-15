@@ -11,6 +11,7 @@ from app.schemas.postcodes import (
     PostcodeCreateSchema,
     PostcodeResponseSchema,
     PostcodeQueryParams,
+    LatLonBoundsSchema
 )
 from app.models.postcodes import Postcodes
 
@@ -30,6 +31,19 @@ async def get_items(
         q = q.filter(Postcodes.latitude == query_data.latitude)
     if query_data.longitude:
         q = q.filter(Postcodes.longitude == query_data.longitude)
+    if query_data.min_lat:
+        q = q.filter(Postcodes.latitude >= query_data.min_lat)
+    if query_data.max_lat:
+        q = q.filter(Postcodes.latitude <= query_data.max_lat)
+    if query_data.min_lon:
+        q = q.filter(Postcodes.longitude >= query_data.min_lon)
+    if query_data.max_lon:
+        q = q.filter(Postcodes.longitude <= query_data.max_lon)
+    result = db.execute(q)
+    return result.scalars().all()
+
+def get_items_from_latlon(db: Session, query_data: LatLonBoundsSchema) -> list[PostcodeResponseSchema]:
+    q = db.query(Postcodes)
     if query_data.min_lat:
         q = q.filter(Postcodes.latitude >= query_data.min_lat)
     if query_data.max_lat:
