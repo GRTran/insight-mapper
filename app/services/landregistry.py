@@ -8,6 +8,7 @@ from typing import Iterable
 from enum import Enum
 from SPARQLWrapper import SPARQLWrapper, CSV, POST, GET
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from sqlalchemy.orm import Session
 from app.schemas.postcodes import (
@@ -236,6 +237,7 @@ async def price_data(bounds: GeometricSchema, db: Session) -> list[PricesSchema]
     ]
     res = await asyncio.gather(*tasks)
     # Concatenate results
+    out = []
     res = pd.concat(res)
     agg = res.merge(df, left_on="postcode", right_on="full_postcode")
     agg["date"] = pd.to_datetime(agg["date"])
@@ -253,9 +255,20 @@ async def price_data(bounds: GeometricSchema, db: Session) -> list[PricesSchema]
         )
         # With the mask perform the average price calculations on a 2yr and 5yr basis
         now = datetime.datetime.today()
-        res += [PricesSchema(**square.model_dump(), n_postcodes=len(df[mask]))]
+        two_yr = mask & (now - agg["date"] < datetime.timedelta(days=365 * 2))
+        five_yr = (
+            mask
+            & (now - agg["date"] < datetime.timedelta(days=365 * 5))
+            & (now - agg["date"] >= datetime.timedelta(days=365 * 2))
+        )
+        two_yr_avg = agg.loc[two_yr, "amount"].median()
+        if np.isnan(two_yr_avg): two_yr_avg = None
+        five_yr_avg = agg.loc[five_yr, "amount"].median()
+        if np.isnan(five_yr_avg): five_yr_avg = None
+
+        out += [PricesSchema(**square.model_dump(), two_yr_avg = two_yr_avg, five_yr_avg = five_yr_avg)]
     # Now perform the analysis
-    return PricesSchema()
+    return out
 
 
 if __name__ == "__main__":

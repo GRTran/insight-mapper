@@ -55,5 +55,5 @@ class LatLonSummarySchema(LatLonBoundsSchema):
 class PricesSchema(LatLonBoundsSchema):
     """All data associated with"""
 
-    two_yr_avg: list[float] 
-    five_yr_avg: list[float]
+    two_yr_avg: float | None
+    five_yr_avg: float | None
