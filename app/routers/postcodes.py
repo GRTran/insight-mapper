@@ -11,57 +11,43 @@ from app.const import URL_SEARCH
 from app.schemas.postcodes import (
     PostcodeCreateSchema,
     PostcodeResponseSchema,
-    PostcodeQueryParams,
-    LandRegistrySchema,
+    PostcodeSchema,
+    GeometricSchema,
+    PricesSchema,
     LatLonSummarySchema,
     LatLonBoundsSchema,
 )
-from app.crud.postcodes import get_items, create, delete_postcode
-from app.services.query import get_house_data
-from app.services import calculations
+from app.crud.postcodes import create, delete_postcode
+from app.services import calculations, landregistry
 
 # Set the base router
 router = APIRouter(prefix="/" + URL_SEARCH)
 
-
-@router.get("/", tags=["search"], response_model=list[LandRegistrySchema])
-async def read_latlons(
-    query_data: PostcodeQueryParams = Depends(), db: Session = Depends(create_session)
-) -> list[LandRegistrySchema]:
-    """Get the latitude and longitudes from a postcode.
-
-    e.g. http://localhost:8000/search?postcode=example_name&min_lat=10.0&min_lon=100.0
-    """
+@router.get("/average_prices", tags=["search"], response_model=list[PricesSchema])
+async def avg_prices(query_data: GeometricSchema = Depends(), db: Session = Depends(create_session)
+) -> list[PricesSchema]:
+    """Query the external historical house price service."""
     try:
-        # Get the items from the DB
-        items = await get_items(db, query_data)
-        # Use calculation service to aggregate postcode
-        # # Now use schema to also call the SPARQL Land Registry API
-        # house_data = await get_house_data(items)
-        # Now aggregate the items and data together and return aggregated data
-        return items
+        # Separate the latitude and longitude by size
+        return await landregistry.price_data(query_data, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
 @router.get("/npostcodes", tags=["search"], response_model=list[LatLonSummarySchema])
 async def npostcodes(
-    query_data: PostcodeQueryParams = Depends(), db: Session = Depends(create_session)
+    query_data: GeometricSchema = Depends(), db: Session = Depends(create_session)
 ) -> list[LatLonSummarySchema]:
     """Searches based purely on a maximum and minimum latitude/longitude."""
     try:
         # Separate the latitude and longitude by size
-        lats = (query_data.min_lat, query_data.max_lat)
-        lons = (query_data.min_lon, query_data.max_lon)
-        sub_squares = await calculations.separate_by_size(lats, lons)
-        summary = await calculations.npostcodes(sub_squares)
+        return await calculations.npostcodes(query_data, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.get("/subsquares", tags=["search"], response_model=list[LatLonBoundsSchema])
 async def subsquares(
-    query_data: PostcodeQueryParams = Depends(), db: Session = Depends(create_session)
+    query_data: GeometricSchema = Depends(), db: Session = Depends(create_session)
 ) -> list[LatLonBoundsSchema]:
     """Returns equidistant subsquares from single square.
     """

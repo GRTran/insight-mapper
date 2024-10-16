@@ -1,8 +1,9 @@
 """Service layer calculations"""
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from app.schemas.postcodes import LatLonBoundsSchema, LatLonSummarySchema
-from app.crud.postcodes import get_items_from_latlon
+import pandas as pd
+from sqlalchemy.orm import Session
+from app.schemas.postcodes import LatLonBoundsSchema, LatLonSummarySchema, GeometricSchema
+from app.crud.postcodes import get_frame_from_latlon
 
 
 async def separate_by_size(
@@ -51,16 +52,34 @@ async def separate_by_size(
         clon += lon_spacing
     return subsquares
 
-async def npostcodes(subsquares: list[LatLonBoundsSchema]) -> LatLonSummarySchema:
-    """Takes in the sub-squares and queries db, summarising results.
-    """
+async def npostcodes(bounds: GeometricSchema, db: Session) -> LatLonSummarySchema:
+    """Takes in the maximum and minimum latitude and longitude and separates it into 
+    100 sub-squares, also calculating the total number of postcodes falling in the
+    sub-squares.
 
-    # Execute the thread pool within the async event loop running synchronous crud operation
-    async def _single_query(square):
-        return await asyncio.get_event_loop().run_in_executor(
-            None,
-            get_items_from_latlon, square
+    Separates the results by size
+    """
+    # Get a dataframe of all of the db entries
+    df = get_frame_from_latlon(db, bounds)
+
+    # Filter based on subsquares
+    lats = (bounds.min_lat, bounds.max_lat)
+    lons = (bounds.min_lon, bounds.max_lon)
+    sub_squares = await separate_by_size(lats, lons)
+
+    # Create summary schema for each subsquare
+    res = []
+    for square in sub_squares:
+        min_lat = square.bottom_left[0]
+        max_lat = square.bottom_right[0]
+        min_lon = square.bottom_left[1]
+        max_lon = square.upper_left[1]
+        mask = (
+            (df["latitude"] >= min_lat)
+            & (df["latitude"] < max_lat)
+            & (df["longitude"] >= min_lon)
+            & (df["longitude"] < max_lon)
         )
-    
-    result = await asyncio.gather(*[_single_query(square) for square in subsquares])
-    # Summarise result
+        res += [LatLonSummarySchema(**square.model_dump(), n_postcodes=len(df[mask]))]
+
+    return res

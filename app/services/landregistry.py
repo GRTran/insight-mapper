@@ -2,16 +2,20 @@
 """
 
 import io
+import asyncio
+import datetime
 from typing import Iterable
 from enum import Enum
-from SPARQLWrapper import SPARQLWrapper, CSV
+from SPARQLWrapper import SPARQLWrapper, CSV, POST, GET
 import pandas as pd
 import matplotlib.pyplot as plt
-
+from sqlalchemy.orm import Session
 from app.schemas.postcodes import (
-    PostcodeResponseSchema,
-    LandRegistrySchema,
+    PricesSchema,
+    GeometricSchema,
 )
+from app.crud.postcodes import get_frame_from_latlon
+from app.services import calculations
 
 
 class LocationCriteria(str, Enum):
@@ -115,7 +119,7 @@ class QueryConstructor:
                 )
                 self._loc = (
                     self._loc
-                    + f"?{UKPPIQueryParams.PROPERTYADDRESS.name.lower()} lrcommon:{item} ?{item.value}.\n"
+                    + f"?{UKPPIQueryParams.PROPERTYADDRESS.name.lower()} lrcommon:{item.value} ?{item.value}.\n"
                 )
         self._location_added = True
 
@@ -201,42 +205,57 @@ class QueryConstructor:
 
         # Set the SPARQL query
         self.sparql.setQuery(self._query)
-
+        # Use POST due to expected query size
+        self.sparql.setMethod(GET)
         # Set the return format to JSON
         self.sparql.setReturnFormat(CSV)
 
         # Execute the query and parse the results
         self.results = self.sparql.query().convert()
-        self.df = pd.read_csv(io.BytesIO(self.results))
+        return pd.read_csv(io.BytesIO(self.results))
 
+async def price_data(bounds: GeometricSchema, db: Session) -> list[PricesSchema]:
+    # Query to get a dataframe of postcodes
+    df = get_frame_from_latlon(db, bounds)
+    # Get the sub-squares
+    lats = (bounds.min_lat, bounds.max_lat)
+    lons = (bounds.min_lon, bounds.max_lon)
+    sub_squares = await calculations.separate_by_size(lats, lons)
 
-async def get_house_data(postcodes: PostcodeResponseSchema):
-    # Change to singleton or functional?
-
-    query = QueryConstructor()
-    location_data = {"postcode": " ".join([f"'{p.full_postcode}'" for p in postcodes])}
-    query.location(location_data)
-    query.query()
-    # TODO: This is where we can perform calculations to get data that we want to plot
-    return await aggregate_data(query.df, postcodes)
-
-
-async def aggregate_data(df: pd.DataFrame, postcodes: list) -> list[LandRegistrySchema]:
-    res = [None] * len(postcodes)
-    for i, p in enumerate(postcodes):
-        mask = df["postcode"] == p.full_postcode
-        reduced = df[mask]
-        data = {
-            "full_postcode": p.full_postcode,
-            "district_postcode": p.district_postcode,
-            "subarea_postcode": p.subarea_postcode,
-            "latitude": p.latitude,
-            "longitude": p.longitude,
-            "sold_prices": reduced["amount"].values,
-            "dates": reduced["date"].values,
-        }
-        res[i] = LandRegistrySchema(**data)
-    return res
+    # Batch the query using a multi-threaded approach with the synchronous library
+    def batch_query(postcodes):
+        query = QueryConstructor()
+        location_data = {"postcode": " ".join([f"'{p}'" for p in postcodes])}
+        query.location(location_data)
+        return query.query()
+    loop = asyncio.get_running_loop()
+    batch_size = len(df) // 10
+    tasks = [
+        loop.run_in_executor(None, batch_query, df["full_postcode"].values[i:i+batch_size])
+        for i in range(0, len(df), batch_size)
+    ]
+    res = await asyncio.gather(*tasks)
+    # Concatenate results
+    res = pd.concat(res)
+    agg = res.merge(df, left_on="postcode", right_on="full_postcode")
+    agg["date"] = pd.to_datetime(agg["date"])
+    # Perform analysis on each sub-square
+    for square in sub_squares:
+        min_lat = square.bottom_left[0]
+        max_lat = square.bottom_right[0]
+        min_lon = square.bottom_left[1]
+        max_lon = square.upper_left[1]
+        mask = (
+            (df["latitude"] >= min_lat)
+            & (df["latitude"] < max_lat)
+            & (df["longitude"] >= min_lon)
+            & (df["longitude"] < max_lon)
+        )
+        # With the mask perform the average price calculations on a 2yr and 5yr basis
+        now = datetime.datetime.today()
+        res += [PricesSchema(**square.model_dump(), n_postcodes=len(df[mask]))]
+    # Now perform the analysis
+    return PricesSchema()
 
 
 if __name__ == "__main__":

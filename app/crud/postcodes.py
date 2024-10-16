@@ -3,21 +3,21 @@ responsibilities.
 
 Create, Reuse, Update, Delete operations for the postcodes db.
 """
-
+import pandas as pd
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 from app.schemas.postcodes import (
     PostcodeCreateSchema,
     PostcodeResponseSchema,
-    PostcodeQueryParams,
-    LatLonBoundsSchema
+    PostcodeSchema,
+    GeometricSchema,
 )
 from app.models.postcodes import Postcodes
 
 
 async def get_items(
-    db: Session, query_data: PostcodeQueryParams
+    db: Session, query_data: PostcodeSchema
 ) -> list[PostcodeResponseSchema]:
     """Filter the postcodes db depending on input arguments supplied."""
     q = db.query(Postcodes)
@@ -42,18 +42,26 @@ async def get_items(
     result = db.execute(q)
     return result.scalars().all()
 
-def get_items_from_latlon(db: Session, query_data: LatLonBoundsSchema) -> list[PostcodeResponseSchema]:
+
+def get_frame_from_latlon(
+    db: Session, query_data: GeometricSchema
+) -> list[PostcodeResponseSchema]:
+    """Search postcodes database by specifying maximum and minimum lat/lon lines,
+    producing a square.
+
+    Args:
+        db (Session): _description_
+        query_data (LatLonBoundsSchema): _description_
+
+    Returns:
+        list[PostcodeResponseSchema]: _description_
+    """
     q = db.query(Postcodes)
-    if query_data.min_lat:
-        q = q.filter(Postcodes.latitude >= query_data.min_lat)
-    if query_data.max_lat:
-        q = q.filter(Postcodes.latitude <= query_data.max_lat)
-    if query_data.min_lon:
-        q = q.filter(Postcodes.longitude >= query_data.min_lon)
-    if query_data.max_lon:
-        q = q.filter(Postcodes.longitude <= query_data.max_lon)
-    result = db.execute(q)
-    return result.scalars().all()
+    q = q.filter(Postcodes.latitude >= query_data.min_lat)
+    q = q.filter(Postcodes.latitude <= query_data.max_lat)
+    q = q.filter(Postcodes.longitude >= query_data.min_lon)
+    q = q.filter(Postcodes.longitude <= query_data.max_lon)
+    return pd.read_sql(q.statement, q.session.bind)
 
 
 def create(db: Session, item: PostcodeCreateSchema) -> Postcodes:
