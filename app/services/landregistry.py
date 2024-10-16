@@ -89,6 +89,7 @@ class QueryConstructor:
         self._out_params = "SELECT "
         self._ordering = "ORDER BY "
         self._query = ""
+        self._date = ""
         self._is_constructed = False
         self._location_added = False
 
@@ -124,8 +125,19 @@ class QueryConstructor:
                 )
         self._location_added = True
 
-    def date_range(self) -> None:
-        pass
+    def start_date(self, start_date: datetime.datetime) -> None:
+        if self._date == "":
+            self._date += "FILTER (\n"
+        else:
+            self._date += " &&\n"
+        self._date += f"?date > '{start_date.strftime("%Y-%m-%d")}'^^xsd:date"
+
+    def end_date(self, end_date: datetime.datetime) -> None:
+        if self._date == "":
+            self._date += "FILTER (\n"
+        else:
+            self._date += " &&\n"
+        self._date += f"?date < '{end_date.strftime("%Y-%m-%d")}'^^xsd:date"
 
     def query_parameters(
         self, opts: Iterable[UKPPIQueryParams | AddressQueryParams] | None = None
@@ -181,6 +193,9 @@ class QueryConstructor:
             self.query_parameters()
             self.ordering()
 
+        # Close date filter
+        self._date += ")"
+
         # Construct the query
         self._query = f"""
           # Key Prefixes required for the query
@@ -193,6 +208,9 @@ class QueryConstructor:
           {{
             # The actual filter values in our query
             {self._vars}
+
+            # Filter by date
+            {self._date}
             
             # Query the address from the postcode
             {self._loc}
@@ -207,7 +225,7 @@ class QueryConstructor:
         # Set the SPARQL query
         self.sparql.setQuery(self._query)
         # Use POST due to expected query size
-        self.sparql.setMethod(GET)
+        self.sparql.setMethod(POST)
         # Set the return format to JSON
         self.sparql.setReturnFormat(CSV)
 
@@ -223,11 +241,17 @@ async def price_data(bounds: GeometricSchema, db: Session) -> list[PricesSchema]
     lons = (bounds.min_lon, bounds.max_lon)
     sub_squares = await calculations.separate_by_size(lats, lons)
 
+    # Set date range
+    now = datetime.datetime.today()
+    limit = now - datetime.timedelta(days=365*5)
+
     # Batch the query using a multi-threaded approach with the synchronous library
     def batch_query(postcodes):
         query = QueryConstructor()
         location_data = {"postcode": " ".join([f"'{p}'" for p in postcodes])}
         query.location(location_data)
+        query.start_date(limit)
+        query.end_date(now)
         return query.query()
     loop = asyncio.get_running_loop()
     batch_size = len(df) // 10
@@ -254,7 +278,6 @@ async def price_data(bounds: GeometricSchema, db: Session) -> list[PricesSchema]
             & (df["longitude"] < max_lon)
         )
         # With the mask perform the average price calculations on a 2yr and 5yr basis
-        now = datetime.datetime.today()
         two_yr = mask & (now - agg["date"] < datetime.timedelta(days=365 * 2))
         five_yr = (
             mask
